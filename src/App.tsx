@@ -148,9 +148,9 @@ export default function App() {
       return;
     }
 
-    const header = "Makine\tÜrün\tParti\tTarih\tMiktar\tOnaylayan\tOnay Tarihi\n";
+    const header = "Makine\tÜrün\tParti\tTarih\tBaşlama Zamanı\tBaşlatan\tMiktar\tOnaylayan\tOnay Tarihi\n";
     const rows = done.map(p => 
-      `${p.machine}\t${p.product}\t${p.batch}\t${p.date}\t${p.quantity}\t${p.approvedBy}\t${new Date(p.approvedAt).toLocaleString()}`
+      `${p.machine}\t${p.product}\t${p.batch}\t${p.date}\t${p.startedAt ? new Date(p.startedAt).toLocaleString('tr-TR') : '-'}\t${p.startedBy || '-'}\t${p.quantity}\t${p.approvedBy}\t${new Date(p.approvedAt).toLocaleString('tr-TR')}`
     ).join("\n");
     const csv = "\uFEFF" + header + rows;
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -477,6 +477,12 @@ export default function App() {
                           {/* Devam Eden İşler */}
                           {inProgress
                             .filter(p => p.machine === hat.name)
+                            .sort((a, b) => {
+                              // Sort by priority first (urgent first), then by start time (newest first)
+                              if (a.priority === 'urgent' && b.priority !== 'urgent') return -1;
+                              if (b.priority === 'urgent' && a.priority !== 'urgent') return 1;
+                              return new Date(b.startedAt) - new Date(a.startedAt);
+                            })
                             .map((work, i) => (
                             <div key={`progress-${i}`} className="p-4 border-2 border-yellow-200 rounded-lg bg-yellow-50 shadow-sm hover:shadow-md transition-shadow">
                               <div className="flex justify-between items-start mb-2">
@@ -589,6 +595,8 @@ export default function App() {
                           <th className="text-left p-4 font-semibold">Ürün</th>
                           <th className="text-left p-4 font-semibold">Parti</th>
                           <th className="text-left p-4 font-semibold">Tarih</th>
+                          <th className="text-left p-4 font-semibold">Başlama Zamanı</th>
+                          <th className="text-left p-4 font-semibold">Başlatan</th>
                           <th className="text-left p-4 font-semibold">Miktar</th>
                           <th className="text-left p-4 font-semibold">Onaylayan</th>
                           <th className="text-left p-4 font-semibold">Onay Tarihi</th>
@@ -605,6 +613,10 @@ export default function App() {
                             <td className="p-4 font-medium">{p.product}</td>
                             <td className="p-4">{p.batch}</td>
                             <td className="p-4">{p.date}</td>
+                            <td className="p-4 text-sm text-gray-600">
+                              {p.startedAt ? new Date(p.startedAt).toLocaleString('tr-TR') : '-'}
+                            </td>
+                            <td className="p-4">{p.startedBy || '-'}</td>
                             <td className="p-4">
                               <Badge variant="secondary">
                                 {p.quantity}
