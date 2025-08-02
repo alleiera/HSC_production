@@ -38,6 +38,10 @@ export default function App() {
     const savedPlans = localStorage.getItem("plans");
     return savedPlans ? JSON.parse(savedPlans) : [];
   });
+  const [inProgress, setInProgress] = useState(() => {
+    const savedInProgress = localStorage.getItem("inProgress");
+    return savedInProgress ? JSON.parse(savedInProgress) : [];
+  });
   const [done, setDone] = useState(() => {
     const savedDone = localStorage.getItem("done");
     return savedDone ? JSON.parse(savedDone) : [];
@@ -53,6 +57,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("plans", JSON.stringify(plans));
   }, [plans]);
+
+  useEffect(() => {
+    localStorage.setItem("inProgress", JSON.stringify(inProgress));
+  }, [inProgress]);
 
   useEffect(() => {
     localStorage.setItem("done", JSON.stringify(done));
@@ -84,6 +92,23 @@ export default function App() {
     }
   };
 
+  const startProduction = (plan) => {
+    const startedWork = {
+      ...plan,
+      startedBy: currentUser.username,
+      startedAt: new Date().toISOString(),
+      id: plan.id || Date.now().toString(),
+    };
+
+    setInProgress(prev => [...prev, startedWork]);
+    setPlans(prev => prev.filter(p => p.id !== plan.id));
+    
+    toast({
+      title: "Başarılı",
+      description: "Üretim başlatıldı.",
+    });
+  };
+
   const confirmApproval = () => {
     const qty = Number(popup?.amount);
     if (!qty || qty <= 0) {
@@ -104,7 +129,7 @@ export default function App() {
     };
 
     setDone(prev => [...prev, completedWork]);
-    setPlans(prev => prev.filter(p => p.id !== popup.plan.id));
+    setInProgress(prev => prev.filter(p => p.id !== popup.plan.id));
     setPopup(null);
     
     toast({
@@ -114,7 +139,8 @@ export default function App() {
   };
 
   const downloadExcel = () => {
-    if (done.length === 0) {
+    const totalItems = done.length;
+    if (totalItems === 0) {
       toast({
         title: "Bilgi",
         description: "İndirilecek veri bulunmuyor.",
@@ -370,72 +396,120 @@ export default function App() {
                     <CardHeader>
                       <CardTitle className="flex items-center justify-between">
                         <span>{hat.name}</span>
-                        <Badge className={hat.color}>
-                          {plans.filter(p => p.machine === hat.name).length} Plan
-                        </Badge>
+                        <div className="flex gap-2">
+                          <Badge className={hat.color}>
+                            {plans.filter(p => p.machine === hat.name).length} Bekleyen
+                          </Badge>
+                          <Badge className="bg-yellow-100 text-yellow-800">
+                            {inProgress.filter(p => p.machine === hat.name).length} Devam Eden
+                          </Badge>
+                        </div>
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                      {plans.filter(p => p.machine === hat.name).length === 0 ? (
+                      {plans.filter(p => p.machine === hat.name).length === 0 && 
+                       inProgress.filter(p => p.machine === hat.name).length === 0 ? (
                         <div className="text-center py-8 text-gray-500">
                           <Calendar className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                          <p>Henüz plan bulunmuyor</p>
+                          <p>Henüz iş bulunmuyor</p>
                         </div>
                       ) : (
-                        plans
-                          .filter(p => p.machine === hat.name)
-                          .sort((a, b) => {
-                            // Urgent items first
-                            if (a.priority === 'urgent' && b.priority !== 'urgent') return -1;
-                            if (b.priority === 'urgent' && a.priority !== 'urgent') return 1;
-                            return 0;
-                          })
-                          .map((plan, i) => (
-                          <div key={i} className="p-4 border rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow">
-                            <div className="flex justify-between items-start mb-2">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <h4 className="font-semibold text-gray-900">{plan.product}</h4>
-                                  <Badge className={`text-xs ${priorityConfig[plan.priority || 'normal'].color}`}>
-                                    {priorityConfig[plan.priority || 'normal'].icon} {priorityConfig[plan.priority || 'normal'].label}
-                                  </Badge>
+                        <>
+                          {/* Bekleyen Planlar */}
+                          {plans
+                            .filter(p => p.machine === hat.name)
+                            .sort((a, b) => {
+                              // Urgent items first
+                              if (a.priority === 'urgent' && b.priority !== 'urgent') return -1;
+                              if (b.priority === 'urgent' && a.priority !== 'urgent') return 1;
+                              return 0;
+                            })
+                            .map((plan, i) => (
+                            <div key={`plan-${i}`} className="p-4 border rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow">
+                              <div className="flex justify-between items-start mb-2">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <h4 className="font-semibold text-gray-900">{plan.product}</h4>
+                                    <Badge className={`text-xs ${priorityConfig[plan.priority || 'normal'].color}`}>
+                                      {priorityConfig[plan.priority || 'normal'].icon} {priorityConfig[plan.priority || 'normal'].label}
+                                    </Badge>
+                                    <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700">
+                                      Bekliyor
+                                    </Badge>
+                                  </div>
+                                  <div className="text-sm text-gray-500 space-y-1">
+                                    <p>Parti: {plan.batch}</p>
+                                    <p>Tarih: {plan.date}</p>
+                                  </div>
                                 </div>
-                                <div className="text-sm text-gray-500 space-y-1">
-                                  <p>Parti: {plan.batch}</p>
-                                  <p>Tarih: {plan.date}</p>
-                                </div>
-                              </div>
-                              <div className="flex flex-col gap-2 ml-2">
-                                {(currentUser.role === "admin" || currentUser.role === "yönetici") && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                      const newPriority = plan.priority === 'urgent' ? 'normal' : 'urgent';
-                                      setPlans(prev => prev.map(p => 
-                                        p.id === plan.id ? { ...p, priority: newPriority } : p
-                                      ));
-                                      toast({
-                                        title: "Başarılı",
-                                        description: `Öncelik ${priorityConfig[newPriority].label} olarak değiştirildi.`,
-                                      });
-                                    }}
-                                    className={plan.priority === 'urgent' ? 'border-red-300 text-red-700 hover:bg-red-50' : 'border-orange-300 text-orange-700 hover:bg-orange-50'}
+                                <div className="flex flex-col gap-2 ml-2">
+                                  {(currentUser.role === "admin" || currentUser.role === "yönetici") && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        const newPriority = plan.priority === 'urgent' ? 'normal' : 'urgent';
+                                        setPlans(prev => prev.map(p => 
+                                          p.id === plan.id ? { ...p, priority: newPriority } : p
+                                        ));
+                                        toast({
+                                          title: "Başarılı",
+                                          description: `Öncelik ${priorityConfig[newPriority].label} olarak değiştirildi.`,
+                                        });
+                                      }}
+                                      className={plan.priority === 'urgent' ? 'border-red-300 text-red-700 hover:bg-red-50' : 'border-orange-300 text-orange-700 hover:bg-orange-50'}
+                                    >
+                                      {plan.priority === 'urgent' ? '⬇️ Normal' : '⬆️ Acil'}
+                                    </Button>
+                                  )}
+                                  <Button 
+                                    size="sm" 
+                                    onClick={() => startProduction(plan)}
+                                    className={plan.priority === 'urgent' ? 'bg-green-600 hover:bg-green-700' : 'bg-green-500 hover:bg-green-600'}
                                   >
-                                    {plan.priority === 'urgent' ? '⬇️ Normal' : '⬆️ Acil'}
+                                    ▶️ Başla
                                   </Button>
-                                )}
-                                <Button 
-                                  size="sm" 
-                                  onClick={() => setPopup({ plan, amount: "" })}
-                                  className={plan.priority === 'urgent' ? 'bg-red-600 hover:bg-red-700' : ''}
-                                >
-                                  Onayla
-                                </Button>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))
+                          ))}
+
+                          {/* Devam Eden İşler */}
+                          {inProgress
+                            .filter(p => p.machine === hat.name)
+                            .map((work, i) => (
+                            <div key={`progress-${i}`} className="p-4 border-2 border-yellow-200 rounded-lg bg-yellow-50 shadow-sm hover:shadow-md transition-shadow">
+                              <div className="flex justify-between items-start mb-2">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <h4 className="font-semibold text-gray-900">{work.product}</h4>
+                                    <Badge className={`text-xs ${priorityConfig[work.priority || 'normal'].color}`}>
+                                      {priorityConfig[work.priority || 'normal'].icon} {priorityConfig[work.priority || 'normal'].label}
+                                    </Badge>
+                                    <Badge className="text-xs bg-yellow-100 text-yellow-800 border-yellow-300">
+                                      🔄 Devam Ediyor
+                                    </Badge>
+                                  </div>
+                                  <div className="text-sm text-gray-600 space-y-1">
+                                    <p>Parti: {work.batch}</p>
+                                    <p>Tarih: {work.date}</p>
+                                    <p>Başlatan: {work.startedBy}</p>
+                                    <p>Başlama: {new Date(work.startedAt).toLocaleString('tr-TR')}</p>
+                                  </div>
+                                </div>
+                                <div className="flex flex-col gap-2 ml-2">
+                                  <Button 
+                                    size="sm" 
+                                    onClick={() => setPopup({ plan: work, amount: "" })}
+                                    className="bg-blue-600 hover:bg-blue-700"
+                                  >
+                                    ✅ Onayla
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </>
                       )}
                     </CardContent>
                   </Card>
