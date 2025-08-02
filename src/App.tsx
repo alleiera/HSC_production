@@ -415,66 +415,489 @@ export default function App() {
                         </div>
                       ) : (
                         <>
-                          {/* Bekleyen Planlar */}
-                          {plans
-                            .filter(p => p.machine === hat.name)
-                            .sort((a, b) => {
-                              // Urgent items first
-                              if (a.priority === 'urgent' && b.priority !== 'urgent') return -1;
-                              if (b.priority === 'urgent' && a.priority !== 'urgent') return 1;
-                              return 0;
-                            })
-                            .map((plan, i) => (
-                            <div key={`plan-${i}`} className="p-4 border rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow">
-                              <div className="flex justify-between items-start mb-2">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <h4 className="font-semibold text-gray-900">{plan.product}</h4>
-                                    <Badge className={`text-xs ${priorityConfig[plan.priority || 'normal'].color}`}>
-                                      {priorityConfig[plan.priority || 'normal'].icon} {priorityConfig[plan.priority || 'normal'].label}
-                                    </Badge>
-                                    <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700">
-                                      Bekliyor
-                                    </Badge>
-                                  </div>
-                                  <div className="text-sm text-gray-500 space-y-1">
-                                    <p>Parti: {plan.batch}</p>
-                                    <p>Tarih: {plan.date}</p>
-                                  </div>
-                                </div>
-                                <div className="flex flex-col gap-2 ml-2">
-                                  {(currentUser.role === "admin" || currentUser.role === "yönetici") && (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => {
-                                        const newPriority = plan.priority === 'urgent' ? 'normal' : 'urgent';
-                                        setPlans(prev => prev.map(p => 
-                                          p.id === plan.id ? { ...p, priority: newPriority } : p
-                                        ));
-                                        toast({
-                                          title: "Başarılı",
-                                          description: `Öncelik ${priorityConfig[newPriority].label} olarak değiştirildi.`,
-                                        });
-                                      }}
-                                      className={plan.priority === 'urgent' ? 'border-red-300 text-red-700 hover:bg-red-50' : 'border-orange-300 text-orange-700 hover:bg-orange-50'}
-                                    >
-                                      {plan.priority === 'urgent' ? '⬇️ Normal' : '⬆️ Acil'}
-                                    </Button>
-                                  )}
-                                  <Button 
-                                    size="sm" 
-                                    onClick={() => startProduction(plan)}
-                                    className={plan.priority === 'urgent' ? 'bg-green-600 hover:bg-green-700' : 'bg-green-500 hover:bg-green-600'}
-                                  >
-                                    ▶️ Başla
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-
                           {/* Devam Eden İşler */}
+                          {inProgress.filter(p => p.machine === hat.name).length > 0 && (
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-2 mb-3">
+                                <div className="w-3 h-3 bg-yellow-400 rounded-full animate-pulse"></div>
+                                <h4 className="font-semibold text-yellow-700">Devam Eden İşler</h4>
+                              </div>
+                              {inProgress
+                                .filter(p => p.machine === hat.name)
+                                .sort((a, b) => {
+                                  // Sort by priority first (urgent first), then by start time (newest first)
+                                  if (a.priority === 'urgent' && b.priority !== 'urgent') return -1;
+                                  if (b.priority === 'urgent' && a.priority !== 'urgent') return 1;
+                                  return new Date(b.startedAt) - new Date(a.startedAt);
+                                })
+                                .map((work, i) => (
+                                <div key={`progress-${i}`} className="p-4 border-2 border-yellow-200 rounded-lg bg-yellow-50 shadow-sm hover:shadow-md transition-shadow">
+                                  <div className="flex justify-between items-start mb-2">
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <h4 className="font-semibold text-gray-900">{work.product}</h4>
+                                        <Badge className={`text-xs ${priorityConfig[work.priority || 'normal'].color}`}>
+                                          {priorityConfig[work.priority || 'normal'].icon} {priorityConfig[work.priority || 'normal'].label}
+                                        </Badge>
+                                        <Badge className="text-xs bg-yellow-100 text-yellow-800 border-yellow-300">
+                                          🔄 Devam Ediyor
+                                        </Badge>
+                                      </div>
+                                      <div className="text-sm text-gray-600 space-y-1">
+                                        <p>Parti: {work.batch}</p>
+                                        <p>Tarih: {work.date}</p>
+                                        <p>Başlatan: {work.startedBy}</p>
+                                        <p>Başlama: {new Date(work.startedAt).toLocaleString('tr-TR')}</p>
+                                      </div>
+                                    </div>
+                                    <div className="flex flex-col gap-2 ml-2">
+                                      <Button 
+                                        size="sm" 
+                                        onClick={() => setPopup({ plan: work, amount: "" })}
+                                        className="bg-blue-600 hover:bg-blue-700"
+                                      >
+                                        ✅ Onayla
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Separator between in-progress and waiting */}
+                          {inProgress.filter(p => p.machine === hat.name).length > 0 && 
+                           plans.filter(p => p.machine === hat.name).length > 0 && (
+                            <div className="flex items-center my-6">
+                              <div className="flex-1 h-px bg-gray-300"></div>
+                              <div className="px-4 text-sm text-gray-500 bg-gray-50 rounded-full border">
+                                Bekleyen İşler
+                              </div>
+                              <div className="flex-1 h-px bg-gray-300"></div>
+                            </div>
+                          )}
+
+                          {/* Bekleyen Planlar */}
+                          {plans.filter(p => p.machine === hat.name).length > 0 && (
+                            <div className="space-y-3">
+                              {inProgress.filter(p => p.machine === hat.name).length === 0 && (
+                                <div className="flex items-center gap-2 mb-3">
+                                  <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
+                                  <h4 className="font-semibold text-blue-700">Bekleyen İşler</h4>
+                                </div>
+                              )}
+                              {plans
+                                .filter(p => p.machine === hat.name)
+                                .sort((a, b) => {
+                                  // Urgent items first
+                                  if (a.priority === 'urgent' && b.priority !== 'urgent') return -1;
+                                  if (b.priority === 'urgent' && a.priority !== 'urgent') return 1;
+                                  return 0;
+                                })
+                                .map((plan, i) => (
+                                <div key={`plan-${i}`} className="p-4 border rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow">
+                                  <div className="flex justify-between items-start mb-2">
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <h4 className="font-semibold text-gray-900">{plan.product}</h4>
+                                        <Badge className={`text-xs ${priorityConfig[plan.priority || 'normal'].color}`}>
+                                          {priorityConfig[plan.priority || 'normal'].icon} {priorityConfig[plan.priority || 'normal'].label}
+                                        </Badge>
+                                        <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700">
+                                          Bekliyor
+                                        </Badge>
+                                      </div>
+                                      <div className="text-sm text-gray-500 space-y-1">
+                                        <p>Parti: {plan.batch}</p>
+                                        <p>Tarih: {plan.date}</p>
+                                      </div>
+                                    </div>
+                                    <div className="flex flex-col gap-2 ml-2">
+                                      {(currentUser.role === "admin" || currentUser.role === "yönetici") && (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => {
+                                            const newPriority = plan.priority === 'urgent' ? 'normal' : 'urgent';
+                                            setPlans(prev => prev.map(p => 
+                                              p.id === plan.id ? { ...p, priority: newPriority } : p
+                                            ));
+                                            toast({
+                                              title: "Başarılı",
+                                              description: `Öncelik ${priorityConfig[newPriority].label} olarak değiştirildi.`,
+                                            });
+                                          }}
+                                          className={plan.priority === 'urgent' ? 'border-red-300 text-red-700 hover:bg-red-50' : 'border-orange-300 text-orange-700 hover:bg-orange-50'}
+                                        >
+                                          {plan.priority === 'urgent' ? '⬇️ Normal' : '⬆️ Acil'}
+                                        </Button>
+                                      )}
+                                      <Button 
+                                        size="sm" 
+                                        onClick={() => startProduction(plan)}
+                                        className={plan.priority === 'urgent' ? 'bg-green-600 hover:bg-green-700' : 'bg-green-500 hover:bg-green-600'}
+                                      >
+                                        ▶️ Başla
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === "kullanicilar" && currentUser.role === "admin" && (
+            <Card>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b bg-gray-50">
+                        <th className="text-left p-4 font-semibold">Kullanıcı Adı</th>
+                        <th className="text-left p-4 font-semibold">Rol</th>
+                        <th className="text-left p-4 font-semibold">İşlemler</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.map((user, i) => (
+                        <tr key={i} className="border-b hover:bg-gray-50">
+                          <td className="p-4 font-medium">{user.username}</td>
+                          <td className="p-4">
+                            <Badge className={getRoleColor(user.role)}>
+                              {user.role}
+                            </Badge>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex items-center space-x-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setUserManagementPopup({ 
+                                  type: "edit", 
+                                  user: { ...user, originalUsername: user.username } 
+                                })}
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              {user.username !== currentUser.username && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => deleteUser(user.username)}
+                                  className="text-red-600 hover:text-red-700"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {activeTab === "bitmis" && (
+            <Card>
+              <CardContent className="p-0">
+                {done.length === 0 ? (
+                  <div className="text-center py-12">
+                    <CheckCircle className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                    <p className="text-gray-500">Henüz bitirilen iş bulunmuyor</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b bg-gray-50">
+                          <th className="text-left p-4 font-semibold">Makine</th>
+                          <th className="text-left p-4 font-semibold">Ürün</th>
+                          <th className="text-left p-4 font-semibold">Parti</th>
+                          <th className="text-left p-4 font-semibold">Tarih</th>
+                          <th className="text-left p-4 font-semibold">Başlama Zamanı</th>
+                          <th className="text-left p-4 font-semibold">Başlatan</th>
+                          <th className="text-left p-4 font-semibold">Miktar</th>
+                          <th className="text-left p-4 font-semibold">Onaylayan</th>
+                          <th className="text-left p-4 font-semibold">Onay Tarihi</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {done.map((p, i) => (
+                          <tr key={i} className="border-b hover:bg-gray-50">
+                            <td className="p-4">
+                              <Badge variant="outline">
+                                {p.machine}
+                              </Badge>
+                            </td>
+                            <td className="p-4 font-medium">{p.product}</td>
+                            <td className="p-4">{p.batch}</td>
+                            <td className="p-4">{p.date}</td>
+                            <td className="p-4 text-sm text-gray-600">
+                              {p.startedAt ? new Date(p.startedAt).toLocaleString('tr-TR') : '-'}
+                            </td>
+                            <td className="p-4">{p.startedBy || '-'}</td>
+                            <td className="p-4">
+                              <Badge variant="secondary">
+                                {p.quantity}
+                              </Badge>
+                            </td>
+                            <td className="p-4">{p.approvedBy}</td>
+                            <td className="p-4 text-sm text-gray-500">
+                              {new Date(p.approvedAt).toLocaleString('tr-TR')}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </main>
+
+      <Dialog open={!!popup} onOpenChange={() => setPopup(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Üretim Onayı</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <h4 className="font-semibold mb-2">{popup?.plan?.product}</h4>
+              <div className="text-sm text-gray-600 space-y-1">
+                <p>Makine: {popup?.plan?.machine}</p>
+                <p>Parti: {popup?.plan?.batch}</p>
+                <p>Tarih: {popup?.plan?.date}</p>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2">Üretilen Miktar</label>
+              <Input
+                type="number"
+                placeholder="Miktar girin"
+                value={popup?.amount || ""}
+                onChange={e => setPopup(p => ({ ...p, amount: e.target.value }))}
+                onKeyPress={e => e.key === 'Enter' && confirmApproval()}
+              />
+            </div>
+            <Button className="w-full" onClick={confirmApproval}>
+              <CheckCircle className="w-4 h-4 mr-2" />
+              Onayla ve Tamamla
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!userManagementPopup} onOpenChange={() => setUserManagementPopup(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {userManagementPopup?.type === "add" ? "Yeni Kullanıcı Ekle" : "Kullanıcı Düzenle"}
+            </DialogTitle>
+          </DialogHeader>
+          <UserForm 
+            user={userManagementPopup?.user}
+            onSubmit={userManagementPopup?.type === "add" ? addUser : updateUser}
+            isEdit={userManagementPopup?.type === "edit"}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Toaster />
+    </div>
+  );
+}
+
+function PlanForm({ hatlar, onAdd }) {
+  const [machine, setMachine] = useState(hatlar[0].name);
+  const [product, setProduct] = useState("");
+  const [batch, setBatch] = useState("");
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [priority, setPriority] = useState("normal");
+
+  const handleAdd = () => {
+    if (!product.trim() || !batch.trim() || !date) {
+      toast({
+        title: "Hata",
+        description: "Lütfen tüm alanları doldurun.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    onAdd({ machine, product: product.trim(), batch: batch.trim(), date, priority });
+    setProduct("");
+    setBatch("");
+    setDate(new Date().toISOString().split('T')[0]);
+    setPriority("normal");
+  };
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Makine</label>
+        <Select value={machine} onValueChange={setMachine}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {hatlar.map(h => (
+              <SelectItem key={h.id} value={h.name}>
+                {h.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Ürün</label>
+        <Input 
+          placeholder="Ürün adı" 
+          value={product} 
+          onChange={e => setProduct(e.target.value)} 
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Parti</label>
+        <Input 
+          placeholder="Parti no" 
+          value={batch} 
+          onChange={e => setBatch(e.target.value)} 
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Tarih</label>
+        <Input 
+          type="date" 
+          value={date} 
+          onChange={e => setDate(e.target.value)} 
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Öncelik</label>
+        <Select value={priority} onValueChange={setPriority}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="normal">
+              <div className="flex items-center gap-2">
+                <span>📋</span>
+                <span>Normal</span>
+              </div>
+            </SelectItem>
+            <SelectItem value="urgent">
+              <div className="flex items-center gap-2">
+                <span>🔥</span>
+                <span>Acil</span>
+              </div>
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <Button onClick={handleAdd} className="w-full">
+        <Plus className="w-4 h-4 mr-2" />
+        Ekle
+      </Button>
+    </div>
+  );
+}
+
+function UserForm({ user, onSubmit, isEdit }) {
+  const [username, setUsername] = useState(user?.username || "");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState(user?.role || "user");
+
+  const handleSubmit = () => {
+    if (!username.trim()) {
+      toast({
+        title: "Hata",
+        description: "Kullanıcı adı gereklidir.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!isEdit && !password.trim()) {
+      toast({
+        title: "Hata",
+        description: "Şifre gereklidir.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const userData = {
+      username: username.trim(),
+      role,
+      ...(isEdit && { originalUsername: user.originalUsername }),
+      ...(password.trim() && { password: password.trim() }),
+      ...(!password.trim() && isEdit && { password: user.password }),
+    };
+
+    onSubmit(userData);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Kullanıcı Adı</label>
+        <Input
+          placeholder="Kullanıcı adı girin"
+          value={username}
+          onChange={e => setUsername(e.target.value)}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-sm font-medium">
+          Şifre {isEdit && <span className="text-gray-500">(boş bırakılırsa değişmez)</span>}
+        </label>
+        <Input
+          type="password"
+          placeholder={isEdit ? "Yeni şifre (opsiyonel)" : "Şifre girin"}
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Rol</label>
+        <Select value={role} onValueChange={setRole}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="user">Kullanıcı</SelectItem>
+            <SelectItem value="yönetici">Yönetici</SelectItem>
+            <SelectItem value="admin">Admin</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <Button className="w-full" onClick={handleSubmit}>
+        <UserPlus className="w-4 h-4 mr-2" />
+        {isEdit ? "Güncelle" : "Kullanıcı Ekle"}
+      </Button>
+    </div>
+  );
+}
                           {inProgress
                             .filter(p => p.machine === hat.name)
                             .sort((a, b) => {
